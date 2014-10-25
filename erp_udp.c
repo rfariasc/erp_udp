@@ -32,10 +32,17 @@ struct paquete{
 };
 struct paquete *primero_up, *ultimo_up, *primero_down, *ultimo_down;
 
-int bucketLevelUp = 0;                                          // Variable global con el espacio usado del balde de subida.
-int bucketLevelDown = 0;                                        // Variable global con el espacio usado del balde de bajada.
-int bucketSize = 15000;                                         // Variable global para controlar el tamano maximo de rafaga.
-int leakingRate = 10000;                                        // Variable global para controlar la tasa de vaciado del balde.
+/*
+    Los puntereos primero_up y ultimo_up, son los punteros al ultimo y primero de la lista
+    que contiene los paquetes recibidos desde el cliente.
+    Mismo caso para primero_down y ultimo_down
+*/
+
+
+// int bucketLevelUp = 0;                                          // Variable global con el espacio usado del balde de subida.
+// int bucketLevelDown = 0;                                        // Variable global con el espacio usado del balde de bajada.
+// int bucketSize = 15000;                                         // Variable global para controlar el tamano maximo de rafaga.
+// int leakingRate = 10000;                                        // Variable global para controlar la tasa de vaciado del balde.
 int subida=0;                                                   // Variable global para almacenar la tasa de subida (graphics).
 int bajada=0;                                                   // Variable global para almacenar la tasa de bajada (graphics).
 int contador_up=0;
@@ -47,8 +54,8 @@ int contador_down=0;
 
 pthread_mutex_t subidaLock = PTHREAD_MUTEX_INITIALIZER;         // Candado de exclusion mutua para la tasa de subida.
 pthread_mutex_t bajadaLock = PTHREAD_MUTEX_INITIALIZER;         // Candado de exclusion mutua para la tasa de bajada.
-pthread_mutex_t bucketLockUp = PTHREAD_MUTEX_INITIALIZER;       // Candado de exclusion mutua para el balde de subida.
-pthread_mutex_t bucketLockDown = PTHREAD_MUTEX_INITIALIZER;     // Candado de exclusion mutua para el balde de bajada.
+// pthread_mutex_t bucketLockUp = PTHREAD_MUTEX_INITIALIZER;       // Candado de exclusion mutua para el balde de subida.
+// pthread_mutex_t bucketLockDown = PTHREAD_MUTEX_INITIALIZER;     // Candado de exclusion mutua para el balde de bajada.
 pthread_mutex_t bufupfirst = PTHREAD_MUTEX_INITIALIZER;         // Candado de exclusion mutua para el bufer de subida
 pthread_mutex_t bufdownfirst = PTHREAD_MUTEX_INITIALIZER;         // Candado de exclusion mutua para el bufer de bajada
 pthread_mutex_t bufuplast = PTHREAD_MUTEX_INITIALIZER;          // Candado de exclusion mutua para el bufer de subida.
@@ -56,8 +63,8 @@ pthread_mutex_t bufdownlast = PTHREAD_MUTEX_INITIALIZER;          // Candado de 
 pthread_mutex_t uploadlock = PTHREAD_MUTEX_INITIALIZER;          // Candado de exclusion mutua para el hilo de subida.
 pthread_mutex_t downloadlock = PTHREAD_MUTEX_INITIALIZER;          // Candado de exclusion mutua para el hilo de bajada.
 
-pthread_cond_t bucketChangeUp = PTHREAD_COND_INITIALIZER;       // Variable de condicion de cambio para el balde de subida.
-pthread_cond_t bucketChangeDown = PTHREAD_COND_INITIALIZER;     // Variable de condicion de cambio para el balde de bajada.
+// pthread_cond_t bucketChangeUp = PTHREAD_COND_INITIALIZER;       // Variable de condicion de cambio para el balde de subida.
+// pthread_cond_t bucketChangeDown = PTHREAD_COND_INITIALIZER;     // Variable de condicion de cambio para el balde de bajada.
 pthread_cond_t bufferespera = PTHREAD_COND_INITIALIZER;         // Variable de condicion de cambio para el hilo de subida.
 pthread_cond_t bufferesperad = PTHREAD_COND_INITIALIZER;         // Variable de condicion de cambio para el hilo de .
 
@@ -65,19 +72,22 @@ pthread_rwlock_t retardolock = PTHREAD_RWLOCK_INITIALIZER;      // Candado de ex
 pthread_rwlock_t contadorup = PTHREAD_RWLOCK_INITIALIZER;       // Candado de exclusion mutua para el contador de subida
 
 pthread_rwlock_t contadordown = PTHREAD_RWLOCK_INITIALIZER;     // Candado de exclusion mutua para el contador de bajada
-pthread_rwlock_t bucketSizeLock = PTHREAD_RWLOCK_INITIALIZER;   // Candado de exclusion mutua para modificacion de tamano del balde.
-pthread_rwlock_t leakingRateLock = PTHREAD_RWLOCK_INITIALIZER;  // Candado de exclusion mutua para modificacion de tasa de vaciado.
+// pthread_rwlock_t bucketSizeLock = PTHREAD_RWLOCK_INITIALIZER;   // Candado de exclusion mutua para modificacion de tamano del balde.
+// pthread_rwlock_t leakingRateLock = PTHREAD_RWLOCK_INITIALIZER;  // Candado de exclusion mutua para modificacion de tasa de vaciado.
 
-void * leak(void * arg);
-void * graphics(void * arg);
-void graphicsCleanup(void * arg);
+// void * leak(void * arg);
+// void * graphics(void * arg);
+// void graphicsCleanup(void * arg);
 
-// Funcion que agrega paquete la buffer de subida.
+/* 
+    Funcion que agrega paquete la buffer de subida.
+
+    Hace una lista, con los paquetes que llegan del cliente, en donde el que esta ultimo, es el ultimo 
+    que llego.
+*/
+
 void add_up(){
     struct paquete *nuevo;
-
-    printf("ADD UP!!\n");
-
 
      nuevo = (struct paquete *) malloc (sizeof(struct paquete));
      gettimeofday(&nuevo->t_init, NULL);
@@ -100,8 +110,12 @@ void add_up(){
       }
 }
 
+/*
+    Funcion que controla el buffer de subida
 
-// Funcion que controla el buffer de subida
+    Aqui se reciben todos los paquetes que el cliente ha enviado
+*/
+
 void *recibe_up(void *args){        //OK
     char buf[MTU];
     int n,i;
@@ -117,21 +131,24 @@ void *recibe_up(void *args){        //OK
         add_up();
 
         pthread_mutex_lock(&bufuplast);
-        for (i=0;i<=n;i++){
+        for (i=0;i<=n;i++){ //copia el contenido que llegó recien en el buffer recien creado (el ultimo)
             ultimo_up->buffer[i]=buf[i];
         }
         ultimo_up->leng=n;
         pthread_mutex_unlock(&bufuplast);
-        pthread_rwlock_wrlock(&contadorup);
-        contador_up=contador_up +1;
-        pthread_rwlock_unlock(&contadorup);
-        pthread_cond_signal(&bufferespera);
 
+        pthread_rwlock_wrlock(&contadorup);
+        contador_up=contador_up +1; //agrega uno a contador_up
+        pthread_rwlock_unlock(&contadorup);
+
+        pthread_cond_signal(&bufferespera);
     }
 }
 
-
-// Funcion que controla la direccion de subida.
+/*
+    Funcion que controla la direccion de subida.
+    Envia los paquetes al servidor (lo que llegaron desde el cliente)
+*/
 void *upload(void *args) {
     struct paquete *auxiliar;
     char buf[MTU];                                                          // Buffer de transferencia.
@@ -143,9 +160,9 @@ void *upload(void *args) {
     struct timeval t_act;
     while(1){
 
-
-
         pthread_mutex_lock(&uploadlock);
+
+
         pthread_rwlock_rdlock(&contadorup);
         while(contador_up == 0){
 
@@ -153,9 +170,8 @@ void *upload(void *args) {
           pthread_cond_wait(&bufferespera, &uploadlock);
           pthread_rwlock_rdlock(&contadorup);
          }
-
-
         pthread_rwlock_unlock(&contadorup);
+
 
         pthread_mutex_lock(&bufupfirst);
 
@@ -177,49 +193,50 @@ void *upload(void *args) {
            usleep(dormir);
         }
 
-        for(i=0;i<n;i+=j)
-        {
+  //      for(i=0;i<n;i+=j)
+  //      {
 
-            printf("Se va a enviar: %s\n", buf+i );
+            printf("Se va a enviar: %s\n", auxiliar->buffer);
 
-            pthread_mutex_lock(&bucketLockUp);                              // Toma el candado de acceso al balde de subida.
-            pthread_rwlock_rdlock(&bucketSizeLock);                         // Toma el candado para garantizar lectura valida del tamano del balde.
-
-
-
-            while (bucketLevelUp >= bucketSize)                             // Mientra el balde esta lleno.
-            {
-                pthread_rwlock_unlock(&bucketSizeLock);                     // Libera candado de lectura de tamano de balde.
-                pthread_cond_wait(&bucketChangeUp, &bucketLockUp);          // Se duerme en la variable de condicion del balde de subida. (Wait tipo Hoare)
-                pthread_rwlock_rdlock(&bucketSizeLock);                     // Toma el candado para garantizar lectura valida del tamano del balde en la revision del while.
-            }
+            // pthread_mutex_lock(&bucketLockUp);                              // Toma el candado de acceso al balde de subida.
+            // pthread_rwlock_rdlock(&bucketSizeLock);                         // Toma el candado para garantizar lectura valida del tamano del balde.
 
 
 
-            j = min(n-i,bucketSize-bucketLevelUp);                          // Cantidad permitida de elementos a transferir. (n-i): elementos restantes por enviar, (bucketSize-bucketLevelUp): maxima rafaga permitida
-
-            pthread_rwlock_unlock(&bucketSizeLock);                         // Libera candado de lectura de tamano de balde.
-
-            pthread_mutex_lock(&subidaLock);                                // Toma el candado de acceso a la tasa de subida para el grafico.
-
-
-
-            subida+=j;                                                      // Suma la cantidad de bytes que transmitira al servidor.
-            pthread_mutex_unlock(&subidaLock);                              // Libera el candado de acceso a la tasa de subida para el grafico.
-            bucketLevelUp+=j;                                               // Aumenta el uso del balde de subida en el mayor posible.
-            pthread_mutex_unlock(&bucketLockUp);                            // Libera el candado de acceso al balde de subida.
+            // while (bucketLevelUp >= bucketSize)                             // Mientra el balde esta lleno.
+            // {
+            //     pthread_rwlock_unlock(&bucketSizeLock);                     // Libera candado de lectura de tamano de balde.
+            //     pthread_cond_wait(&bucketChangeUp, &bucketLockUp);          // Se duerme en la variable de condicion del balde de subida. (Wait tipo Hoare)
+            //     pthread_rwlock_rdlock(&bucketSizeLock);                     // Toma el candado para garantizar lectura valida del tamano del balde en la revision del while.
+            // }
 
 
-            printf("*((int *)(args) + 1) = %d, buf+i = %s, j = %d\n",*((int *)(args) + 1), buf+i, j );
+
+            // j = min(n-i,bucketSize-bucketLevelUp);                          // Cantidad permitida de elementos a transferir. (n-i): elementos restantes por enviar, (bucketSize-bucketLevelUp): maxima rafaga permitida
+
+            // pthread_rwlock_unlock(&bucketSizeLock);                         // Libera candado de lectura de tamano de balde.
+
+            // pthread_mutex_lock(&subidaLock);                                // Toma el candado de acceso a la tasa de subida para el grafico.
+
+
+
+            // subida+=j;                                                      // Suma la cantidad de bytes que transmitira al servidor.
+            // pthread_mutex_unlock(&subidaLock);                              // Libera el candado de acceso a la tasa de subida para el grafico.
+            // bucketLevelUp+=j;                                               // Aumenta el uso del balde de subida en el mayor posible.
+            // pthread_mutex_unlock(&bucketLockUp);                            // Libera el candado de acceso al balde de subida.
+
+
+//            printf("*((int *)(args) + 1) = %d, buf+i = %s, j = %d\n",*((int *)(args) + 1), buf+i, j );
 
 
 
             // if (send(*((int *)(args) + 1), buf+i, j, 0) < 0)                // Envia j bytes recibidos del cliente al servidor.
-            if (sendto(*((int *)(args) + 1), buf+i, j, 0, (struct sockaddr*) &name_cli, sizeof(struct sockaddr_in)) < 0)                // Envia j bytes recibidos del cliente al servidor.
+            // if (sendto(*((int *)(args) + 1), buf+i, j, 0, (struct sockaddr*) &name_cli, sizeof(struct sockaddr_in)) < 0)                // Envia j bytes recibidos del cliente al servidor.
+            if (sendto(*((int *)(args) + 1), auxiliar->buffer, auxiliar->leng, 0, (struct sockaddr*) &name_cli, sizeof(struct sockaddr_in)) < 0)                // Envia j bytes recibidos del cliente al servidor.
                 {perror("send failed"); exit(1);}
 
 
-        }
+//        }
 
 
 
@@ -338,21 +355,21 @@ void *download(void *args) {
 
         for(i=0;i<n;i+=j)
         {
-            pthread_mutex_lock(&bucketLockDown);                            // Toma el candado de acceso al balde de subida.
-            pthread_rwlock_rdlock(&bucketSizeLock);                         // Toma el candado para garantizar lectura valida del tamano del balde.
-            while (bucketLevelDown >= bucketSize)                           // Mientra el balde esta lleno.
-            {
-                pthread_rwlock_unlock(&bucketSizeLock);                     // Libera candado de lectura de tamano de balde.
-                pthread_cond_wait(&bucketChangeDown, &bucketLockDown);      // Se duerme en la variable de condicion del balde de subida. (Wait tipo Hoare)      
-                pthread_rwlock_rdlock(&bucketSizeLock);                     // Toma el candado para garantizar lectura valida del tamano del balde en la revision del while.
-            }
-            j = min(n-i,bucketSize-bucketLevelDown);                        // Cantidad permitida de elementos a transferir. (n-i): elementos restantes por enviar, (bucketSize-bucketLevelUp): maxima rafaga permitida
-            pthread_rwlock_unlock(&bucketSizeLock);                         // Libera candado de lectura de tamano de balde.
-            pthread_mutex_lock(&bajadaLock);                                // Toma el candado de acceso a la tasa de bajada para el grafico.
-            bajada+=j;                                                      // Suma la cantidad de bytes que transmitira al cliente.
-            pthread_mutex_unlock(&bajadaLock);                              // Libera el candado de acceso a la tasa de bajada para el grafico.
-            bucketLevelDown+=j;                                             // Aumenta el uso del balde de subida en el mayor posible.
-            pthread_mutex_unlock(&bucketLockDown);                          // Libera el candado de acceso al balde de subida.
+            // pthread_mutex_lock(&bucketLockDown);                            // Toma el candado de acceso al balde de subida.
+            // pthread_rwlock_rdlock(&bucketSizeLock);                         // Toma el candado para garantizar lectura valida del tamano del balde.
+            // while (bucketLevelDown >= bucketSize)                           // Mientra el balde esta lleno.
+            // {
+            //     pthread_rwlock_unlock(&bucketSizeLock);                     // Libera candado de lectura de tamano de balde.
+            //     pthread_cond_wait(&bucketChangeDown, &bucketLockDown);      // Se duerme en la variable de condicion del balde de subida. (Wait tipo Hoare)      
+            //     pthread_rwlock_rdlock(&bucketSizeLock);                     // Toma el candado para garantizar lectura valida del tamano del balde en la revision del while.
+            // }
+            // j = min(n-i,bucketSize-bucketLevelDown);                        // Cantidad permitida de elementos a transferir. (n-i): elementos restantes por enviar, (bucketSize-bucketLevelUp): maxima rafaga permitida
+            // pthread_rwlock_unlock(&bucketSizeLock);                         // Libera candado de lectura de tamano de balde.
+            // pthread_mutex_lock(&bajadaLock);                                // Toma el candado de acceso a la tasa de bajada para el grafico.
+            // bajada+=j;                                                      // Suma la cantidad de bytes que transmitira al cliente.
+            // pthread_mutex_unlock(&bajadaLock);                              // Libera el candado de acceso a la tasa de bajada para el grafico.
+            // bucketLevelDown+=j;                                             // Aumenta el uso del balde de subida en el mayor posible.
+            // pthread_mutex_unlock(&bucketLockDown);                          // Libera el candado de acceso al balde de subida.
             if (send(*((int *)(args)), buf+i, j, 0) < 0)                    // Envia los j bytes recibidos del servidor al cliente.
                 {perror("send failed"); exit(1);}
         }
@@ -377,7 +394,7 @@ int main(int argc, char *argv[]) {
     char hostname[64];              // Nombre del host remoto.
     pthread_t up;                   // Hebra para control de upload.
     pthread_t down;                 // Hebra para control de download.
-    pthread_t leakyB;               // Hebra para control de vaciamiento de los baldes.
+    // pthread_t leakyB;               // Hebra para control de vaciamiento de los baldes.
     pthread_t recibeup;             // Hebra para la recepcion de paquetes de subida.
     pthread_t recibedown;             // Hebra para la recepcion de paquetes de bajada.
     // struct sockaddr_in name_srv;    // Caracteristicas del socket servidor.
@@ -424,6 +441,7 @@ int main(int argc, char *argv[]) {
 
     if((hp = gethostbyname(hostname)) == NULL)                                  // Obtiene informacion de la maquina remota.
         {perror("gethostbyname failed"); exit(-1);}
+    //    if ((s_cli = socket(AF_INET, SOCK_STREAM, 0)) < 0)                          // Crea socket IPv4, Conexion TCP.
     if ((s_cli = socket(AF_INET, SOCK_DGRAM, 0)) < 0)                          // Crea socket IPv4, Conexion TCP.
         {perror("socket failed"); exit(-1);}
     name_cli.sin_family = AF_INET;                                              // Address Family Internet.
@@ -455,8 +473,8 @@ int main(int argc, char *argv[]) {
         {perror("pthread_create failed"); exit(-1);}
     if(pthread_create(&recibeup, NULL, recibe_up,(void *) args))        // Crea la hebra que controlara el bufer de subida.
         {perror("pthread_create failed"); exit(-1);}
-    if(pthread_create(&leakyB, NULL, leak, NULL))               // Crea la hebra que controlara el vaciamiento de los baldes.
-        {perror("pthread_create failed"); exit(-1);}
+    // if(pthread_create(&leakyB, NULL, leak, NULL))               // Crea la hebra que controlara el vaciamiento de los baldes.
+    //     {perror("pthread_create failed"); exit(-1);}
     if(pthread_create(&up, NULL, upload,(void *) args))         // Crea la hebra que manejara el upload.
         {perror("pthread_create failed"); exit(-1);}
     if(pthread_create(&down, NULL, download,(void *) args))     // Crea la hebra que manejara el download.
@@ -474,28 +492,28 @@ int main(int argc, char *argv[]) {
             printf(" cerrando...\n");
             break;
         }
-        if(condicion==3)
-        {
-            printf("Nuevo tamano del balde [B]: "); scanf("%d",&temp);
-            pthread_rwlock_wrlock(&bucketSizeLock);             // Toma candado de exclusion mutua para cambiar el tamano del balde.
-            bucketSize = temp;                                  // Cambia el tamano del balde.
-            pthread_rwlock_unlock(&bucketSizeLock);             // Libera candado de modificacion de tamano del balde.
-            pthread_cond_signal(&bucketChangeUp);               // Senala a la variable de condicion del balde de subida que hubo un cambio.
-            pthread_cond_signal(&bucketChangeDown);             // Senala a la variable de condicion del balde de bajada que hubo un cambio.
-        }if(condicion==1){
-        printf("Nueva tasa de vaciado [Bps]: "); scanf("%d",&temp);
-        if((temp>bucketSize))
-        {
-            printf("Tamano invalido, cerrando...\n");
-            break;
-        }
-        else
-        {
-            pthread_rwlock_wrlock(&leakingRateLock);            // Toma candado de exclusion mutua para cambiar tasa de vaciado.
-            leakingRate = temp;                                 // Cambia la tasa de vaciado del balde.
-            printf("la nueva tasa es= %d\n",leakingRate);
-            pthread_rwlock_unlock(&leakingRateLock);            // Libera candado de modificacion de tasa de vaciado.
-        }}
+        // if(condicion==3)
+        // {
+        //     printf("Nuevo tamano del balde [B]: "); scanf("%d",&temp);
+        //     pthread_rwlock_wrlock(&bucketSizeLock);             // Toma candado de exclusion mutua para cambiar el tamano del balde.
+        //     bucketSize = temp;                                  // Cambia el tamano del balde.
+        //     pthread_rwlock_unlock(&bucketSizeLock);             // Libera candado de modificacion de tamano del balde.
+        //     pthread_cond_signal(&bucketChangeUp);               // Senala a la variable de condicion del balde de subida que hubo un cambio.
+        //     pthread_cond_signal(&bucketChangeDown);             // Senala a la variable de condicion del balde de bajada que hubo un cambio.
+        // }if(condicion==1){
+        // printf("Nueva tasa de vaciado [Bps]: "); scanf("%d",&temp);
+        // if((temp>bucketSize))
+        // {
+        //     printf("Tamano invalido, cerrando...\n");
+        //     break;
+        // }
+        // else
+        // {
+        //     pthread_rwlock_wrlock(&leakingRateLock);            // Toma candado de exclusion mutua para cambiar tasa de vaciado.
+        //     leakingRate = temp;                                 // Cambia la tasa de vaciado del balde.
+        //     printf("la nueva tasa es= %d\n",leakingRate);
+        //     pthread_rwlock_unlock(&leakingRateLock);            // Libera candado de modificacion de tasa de vaciado.
+        // }}
         if (condicion==2){
                printf("Ingrese nuevo retardo [ms]: "); scanf("%d",&temp);
                pthread_rwlock_wrlock(&retardolock);
@@ -513,8 +531,8 @@ int main(int argc, char *argv[]) {
         {perror("pthread_cancel failed"); exit(-1);}
     if(pthread_cancel(down))                                    // Cancela la hebra de bajada.
         {perror("pthread_cancel failed"); exit(-1);}
-    if(pthread_cancel(leakyB))                                  // Cancela la hebra de actualizacion de tasa de vaciado.
-        {perror("pthread_cancel failed"); exit(-1);}
+    // if(pthread_cancel(leakyB))                                  // Cancela la hebra de actualizacion de tasa de vaciado.
+    //     {perror("pthread_cancel failed"); exit(-1);}
 
 
     // Espera por el retorno de las hebras canceladas.     
@@ -522,8 +540,8 @@ int main(int argc, char *argv[]) {
         {perror("pthread_join failed"); exit(-1);}
     if(pthread_join(down, NULL))
         {perror("pthread_join failed"); exit(-1);}
-    if(pthread_join(leakyB, NULL))
-        {perror("pthread_join failed"); exit(-1);}
+    // if(pthread_join(leakyB, NULL))
+    //     {perror("pthread_join failed"); exit(-1);}
 
     // close(ns);      // Cierra descriptor de socket servidor abierto.
     close(s_srv);   // Cierra descriptor referenciando al socket de la conexion con el cliente.
@@ -532,28 +550,28 @@ int main(int argc, char *argv[]) {
 }
 
 // Funcion que controla el vaciamiento de los baldes.
-void * leak(void * arg){
-    while (1)
-    {
-        sleep(1);
-        pthread_mutex_lock(&bucketLockUp);              // Toma el candado de acceso al balde de subida.
-        if (bucketLevelUp>0)                            // Si el balde de subida no esta vacio.
-        {
-            pthread_rwlock_rdlock(&leakingRateLock);    // Toma el candado de lectura de tasa de vaciado.
-            bucketLevelUp-=leakingRate;                 // Libera una cantidad dada por la tasa de salida.
-            pthread_rwlock_unlock(&leakingRateLock);    // Libera el candado de lectura de tasa de vaciado.
-        }
-        pthread_mutex_unlock(&bucketLockUp);            // Libera el candado de acceso al balde de subida.
-        pthread_cond_signal(&bucketChangeUp);           // Senala a la variable de condicion del balde de subida que hubo un cambio.
+// void *leak(void *arg){
+//     while (1)
+//     {
+//         sleep(1);
+//         pthread_mutex_lock(&bucketLockUp);              // Toma el candado de acceso al balde de subida.
+//         if (bucketLevelUp>0)                            // Si el balde de subida no esta vacio.
+//         {
+//             pthread_rwlock_rdlock(&leakingRateLock);    // Toma el candado de lectura de tasa de vaciado.
+//             bucketLevelUp-=leakingRate;                 // Libera una cantidad dada por la tasa de salida.
+//             pthread_rwlock_unlock(&leakingRateLock);    // Libera el candado de lectura de tasa de vaciado.
+//         }
+//         pthread_mutex_unlock(&bucketLockUp);            // Libera el candado de acceso al balde de subida.
+//         pthread_cond_signal(&bucketChangeUp);           // Senala a la variable de condicion del balde de subida que hubo un cambio.
 
-        pthread_mutex_lock(&bucketLockDown);            // Toma el candado de acceso al balde de bajada.
-        if (bucketLevelDown>0)                          // Si el balde de bajada no esta vacio.
-        {
-            pthread_rwlock_rdlock(&leakingRateLock);    // Toma el candado de lectura de tasa de vaciado.
-            bucketLevelDown-=leakingRate;               // Libera una cantidad dada por la tasa de salida.
-            pthread_rwlock_unlock(&leakingRateLock);    // Libera el candado de lectura de tasa de vaciado.
-        }
-        pthread_mutex_unlock(&bucketLockDown);          // Libera el candado de acceso al balde de bajada.
-        pthread_cond_signal(&bucketChangeDown);         // Senala a la variable de condicion del balde de bajada que hubo un cambio.
-    }
-}
+//         pthread_mutex_lock(&bucketLockDown);            // Toma el candado de acceso al balde de bajada.
+//         if (bucketLevelDown>0)                          // Si el balde de bajada no esta vacio.
+//         {
+//             pthread_rwlock_rdlock(&leakingRateLock);    // Toma el candado de lectura de tasa de vaciado.
+//             bucketLevelDown-=leakingRate;               // Libera una cantidad dada por la tasa de salida.
+//             pthread_rwlock_unlock(&leakingRateLock);    // Libera el candado de lectura de tasa de vaciado.
+//         }
+//         pthread_mutex_unlock(&bucketLockDown);          // Libera el candado de acceso al balde de bajada.
+//         pthread_cond_signal(&bucketChangeDown);         // Senala a la variable de condicion del balde de bajada que hubo un cambio.
+//     }
+// }
