@@ -18,8 +18,8 @@
 #define srv_PORTNUMBER 12346  //12346
 #define cli_PORTNUMBER 12345    //12345
 #define PORCENTAJE_PERDIDA 50
-#define RETARDOUS 10000                 //en ms
-#define RETARDOUS_VARIATION 10000     //en ms
+#define RETARDOUS 1000                 //en ms
+#define RETARDOUS_VARIATION 1000     //en ms
 //////////////////////////////
 
 //argv[0]: throttle_tcp
@@ -162,18 +162,13 @@ void *upload(void *args) {
         gettimeofday(&t_act,NULL);
         microsegundos = ((t_act.tv_usec - auxiliar->t_init.tv_usec)  + ((t_act.tv_sec - auxiliar->t_init.tv_sec) * 1000000.0f));
         
-
         pthread_rwlock_rdlock(&retardolock);
         if(microsegundos<retardo + (agregado = ( (rand()% (2*variacion_retardo)) - variacion_retardo )) ){
-
             dormir = (retardo - microsegundos) + agregado;
-        
-
-        pthread_rwlock_unlock(&retardolock);
-           usleep(dormir);
+            pthread_rwlock_unlock(&retardolock);
+            usleep(dormir);
         }
-
-        printf("se espera %d\n",retardo + agregado);
+        // printf("se espero %d\n",retardo + agregado);
 
 
         // printf("Se va a enviar: %s\n", auxiliar->buffer);
@@ -182,12 +177,13 @@ void *upload(void *args) {
         //en la casa
 
         if ((numero = rand()%101) < (100-PROB_PERDIDA)){ //si hay suerte se manda...
-            printf("SI se manda!!, por que salio %d y la probabilidad de perdidad era = %d\n", numero, PROB_PERDIDA ); 
+            // printf("SI se manda!!, por que salio %d y la probabilidad de perdidad era = %d\n", numero, PROB_PERDIDA ); 
             if (sendto(*((int *)(args) + 1), auxiliar->buffer, auxiliar->leng, 0, (struct sockaddr*) &name_cli, sizeof(struct sockaddr_in)) < 0)                // Envia j bytes recibidos del cliente al servidor.
-                {perror("send failed"); exit(1);}
-        }else{
-            printf("No se manda nada, por que salio %d y la probabilidad de perdidad era = %d\n", numero, PROB_PERDIDA );
+               {perror("send failed"); exit(1);}
         }
+        // else{
+//            printf("No se manda nada, por que salio %d y la probabilidad de perdidad era = %d\n", numero, PROB_PERDIDA );
+//        }
 
 
 
@@ -339,18 +335,27 @@ int main(int argc, char *argv[]) {
 
     srand(time(NULL));              //para que se generen numeros un poco mas "aleatorios"
 
-    // switch(argc) {
-    //     case 3:
+
+    //descomentar, para cuando se terminen las pruebas
+
+    // switch(argc){
+    //     case 6:
             if(gethostname(hostname, sizeof(hostname)) < 0)                     // Si se omite el host_remoto se entiende que es la misma maquina (localhost).
                 {perror("gethostname failed"); exit(-1);}
     //         break;
-    //     case 4:
-    //         strcpy(hostname, argv[2]);                                          // Extrae nombre de host del argumento.
+    //     case 7:
+    //         strcpy(hostname, argv[5]);                                          // Extrae nombre de host del argumento.
     //         break;
     //     default:
-    //         printf("Uso: %s puerto [host_remoto] puerto_remoto \n",argv[0]);
-    //         exit(-1);
-    // }   // En hostname queda el nombre de la maquina destino.
+    //         printf("Uso $%s (retardo_promedio) (variación_retardo) (porcentaje_pérdida) (puerto_local) [host_remoto] (puerto_remoto)\n", argv[0]);
+    // }
+
+
+    // retardo = atoi(argv[1])*1000; 
+    // variacion_retardo = atoi(argv[2])*1000;
+    // PROB_PERDIDA= atoi(argv[3]);
+
+
 
     //////////////////////////////////////////////////////////
     //  Establecimiento de conexion cliente <-> servidor    //
@@ -359,7 +364,7 @@ int main(int argc, char *argv[]) {
         {perror("socket failed"); exit(-1);}
     name_srv.sin_family = AF_INET;                                              // Address Family Internet.
     
-    // name_srv.sin_port = htons(atoi(argv[1]));                                   // Asigna la puerta de servicio de throttle_tcp, la cual es pasada en el primer argumento.
+    // name_srv.sin_port = htons(atoi(argv[4]));                                // puerto local                       
     name_srv.sin_port = htons(srv_PORTNUMBER);
     
     name_srv.sin_addr.s_addr = htonl(INADDR_ANY);                               // Se atienden requerimientos entrantes por cualquier interfaz.
@@ -372,7 +377,7 @@ int main(int argc, char *argv[]) {
 
     if((hp = gethostbyname(hostname)) == NULL)                                  // Obtiene informacion de la maquina remota.
         {perror("gethostbyname failed"); exit(-1);}
-    if ((s_cli = socket(AF_INET, SOCK_DGRAM, 0)) < 0)                          // Crea socket IPv4, Conexion TCP.
+    if ((s_cli = socket(AF_INET, SOCK_DGRAM, 0)) < 0) 
         {perror("socket failed"); exit(-1);}
     name_cli.sin_family = AF_INET;                                              // Address Family Internet.
 
@@ -389,7 +394,7 @@ int main(int argc, char *argv[]) {
     //////////////////////////////////////////////////////////
 
 
-    printf("s_srv = %d, s_cli %d\n",s_srv, s_cli);
+    // printf("s_srv = %d, s_cli %d\n",s_srv, s_cli);
 
     args[0]=s_srv;                                                 // Guarda en el arreglo de argumentos el descriptor del socket servidor abierto (conectado con el programa cliente).
     args[1]=s_cli;                                              // Guarda en el arreglo de argumentos el descriptor del socket cliente (conectado con el programa servidor).
@@ -405,25 +410,33 @@ int main(int argc, char *argv[]) {
         {perror("pthread_create failed"); exit(-1);}
 
 
-    printf("Para terminar fije un tamano invalido (p.ej. -1).\n");
     while(1){
 
         int temp=0;
         int condicion=0;
-        printf("1)  Nueva tasa en [Bps] \n2)  Nuevo retardo en [ms]\n3)Nuevo tamano del balde [B]:\n4) salir \n"); scanf("%d",&condicion);
-        if(condicion==4){
+        printf("1)  Nuevo retardo promedio [ms]\n2)  Nueva variacion retardo en [ms]\n3)  Nueva probabilidad de perdida [0 a 100]:\n4)  Salir \n"); scanf("%d",&condicion);
+        if (condicion==1){
+            printf("Ingrese nuevo retardo promedio [ms]: "); scanf("%d",&temp);
+            pthread_rwlock_wrlock(&retardolock);
+            retardo= temp*1000;
+            printf("El nuevo retardo es de %d ms\n",temp);
+            pthread_rwlock_unlock(&retardolock);
+        }        
+        if (condicion==2){
+            printf("Ingrese nueva variacion retardo [ms]: "); scanf("%d",&temp);
+            variacion_retardo= temp*1000;
+            printf("La nueva variacion de retardo es de %d ms\n",temp);
+        }        
+        if (condicion==3){
 
-            printf(" cerrando...\n");
+            printf("Ingrese nueva probabilidad de perdida [0 a 100]: "); scanf("%d",&temp);
+            PROB_PERDIDA=  temp;
+            printf("La nueva probabilidad de perdida es de %d%%\n",temp);
+        }        
+        if(condicion==4){
+            printf(" Cerrando...\n");
             break;
         }
-        if (condicion==2){
-
-               printf("Ingrese nuevo retardo [ms]: "); scanf("%d",&temp);
-               pthread_rwlock_wrlock(&retardolock);
-               retardo= temp*1000;
-               printf("El nuevo retardo es de %d ms\n",temp);
-               pthread_rwlock_unlock(&retardolock);
-        }        
     }
 
     if(pthread_cancel(recibeup))                                // Cancela la hebra de subida.
