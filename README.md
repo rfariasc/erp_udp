@@ -23,4 +23,9 @@
 
 #Compilación
     
+  Para compilar el programa usar:  
+  $ make 
+  Para limpiar la compilación:
+  $ make clean
+  
 #Ejemplos de uso
