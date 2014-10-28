@@ -105,11 +105,8 @@ void *recibe_up(void *args){
     char buf[MTU];
     int n,i;
 
-    // printf("s_srv RECIBIDO = %d\n", *((int *)(args)));
-    while ((n = recv(*((int *)(args)), buf, sizeof(buf), 0)) > 0){
-        // printf("RECIBIDO (recibe_up)= %s \n", buf );
-        // printf("los bytes que llegaron  = %d\n", n);
 
+    while ((n = recv(*((int *)(args)), buf, sizeof(buf), 0)) > 0){
         add_up();
 
         pthread_mutex_lock(&bufuplast);
@@ -168,24 +165,11 @@ void *upload(void *args) {
             pthread_rwlock_unlock(&retardolock);
             usleep(dormir);
         }
-        // printf("se espero %d\n",retardo + agregado);
-
-
-        // printf("Se va a enviar: %s\n", auxiliar->buffer);
-
-        //TODO, eventualmente borrar la variable numero y todo lo que este demas, esto es para que los niños aprendan
-        //en la casa
 
         if ((numero = rand()%101) < (100-PROB_PERDIDA)){ //si hay suerte se manda...
-            // printf("SI se manda!!, por que salio %d y la probabilidad de perdidad era = %d\n", numero, PROB_PERDIDA ); 
             if (sendto(*((int *)(args) + 1), auxiliar->buffer, auxiliar->leng, 0, (struct sockaddr*) &name_cli, sizeof(struct sockaddr_in)) < 0)                // Envia j bytes recibidos del cliente al servidor.
                {perror("send failed"); exit(1);}
         }
-        // else{
-//            printf("No se manda nada, por que salio %d y la probabilidad de perdidad era = %d\n", numero, PROB_PERDIDA );
-//        }
-
-
 
         pthread_rwlock_wrlock(&contadorup);
         contador_up=contador_up -1;
@@ -199,8 +183,6 @@ void *upload(void *args) {
     }
 }
 
-///////////////NECESARIO???///////////////////////////////////////////////////////////////////////////////
-// Funcion que agrega paquete la buffer de bajada.
 void add_down(){
      struct paquete *nuevo;
 
@@ -235,9 +217,7 @@ void *recibe_down(void *args){
     int n,i;
     while ((n = recv(*((int *)(args)+1), buf, sizeof(buf), 0)) > 0){
 
-        // printf("RECIBIDO (recibe_down)= %s \n", buf );
         add_down();
-
         pthread_mutex_lock(&bufdownlast);
         for (i=0;i<=n;i++){
             ultimo_down->buffer[i]=buf[i];
@@ -298,8 +278,6 @@ void *download(void *args) {
            usleep(dormir);
         }
 
-
-        //TODO hay que arreglar esto, si es que fuese necesario
         for(i=0;i<n;i+=j)
         {
             if (send(*((int *)(args)), buf+i, j, 0) < 0)                    // Envia los j bytes recibidos del servidor al cliente.
@@ -316,8 +294,6 @@ void *download(void *args) {
         pthread_mutex_unlock(&downloadlock);
     }
 }                      
-////////////////NECESARIO??//////////////////////////////////////////////////////////////////////////////
-
 
 int main(int argc, char *argv[]) {
     int s_srv;                      // Descriptor referenciando al socket de la conexion con el programa cliente.
@@ -364,7 +340,6 @@ int main(int argc, char *argv[]) {
         {perror("socket failed"); exit(-1);}
     name_srv.sin_family = AF_INET;                                              // Address Family Internet.
     
-    // name_srv.sin_port = htons(atoi(argv[4]));                                // puerto local                       
     name_srv.sin_port = htons(srv_PORTNUMBER);
     
     name_srv.sin_addr.s_addr = htonl(INADDR_ANY);                               // Se atienden requerimientos entrantes por cualquier interfaz.
@@ -381,7 +356,6 @@ int main(int argc, char *argv[]) {
         {perror("socket failed"); exit(-1);}
     name_cli.sin_family = AF_INET;                                              // Address Family Internet.
 
-    // name_cli.sin_port = htons(atoi(argv[argc-1]));                              // Asigna la puerta de servicio del host remoto, la cual es pasada en el tercer argumento.
     name_cli.sin_port = htons(cli_PORTNUMBER);                              // Asigna la puerta de servicio del host remoto, la cual es pasada en el tercer argumento.
 
     memcpy(&name_cli.sin_addr, hp->h_addr_list[0], hp->h_length);               // Guarda la direccion del host remoto en name_cli.
@@ -393,8 +367,6 @@ int main(int argc, char *argv[]) {
     //  Manejo de las conexiones                            //
     //////////////////////////////////////////////////////////
 
-
-    // printf("s_srv = %d, s_cli %d\n",s_srv, s_cli);
 
     args[0]=s_srv;                                                 // Guarda en el arreglo de argumentos el descriptor del socket servidor abierto (conectado con el programa cliente).
     args[1]=s_cli;                                              // Guarda en el arreglo de argumentos el descriptor del socket cliente (conectado con el programa servidor).
