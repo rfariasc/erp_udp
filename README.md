@@ -6,6 +6,7 @@
 #Descripción
    En ocasiones nos vemos enfrentados a la necesidad de correr una aplicación que establece conexiones a través de Internet y nos interesaría averiguar cuál sería su comportamiento si las transferencias extremo a extremo poseen retardo y pérdidas de paquetes mayores a las de una red local. Por ejemplo, cuando deseamos controlar un robot remoto a través de Internet. Generalmente los desarrollos se hacen en un laboratorio donde la red de área local ofrece 100Mbps de tasas en nivel físico. Surge la pregunta ¿Cómo podemos correr un proyecto haciéndolo creer que tiene mayor retardo y mayor tasa de pérdida de paquetes?.
     A través de esta tarea usted creará una aplicación proxy para aumentar el retardo y las pérdidas en transferencias UDP. La idea es poner un proceso intermedio entre cliente y servidor y luego incorporar retardo y una tasa de pérdida según valores a elección, ver Figura 1.
+    
 ![Intercepción de tráfico y emulación de retardo y pérdida de paquetes](http://profesores.elo.utfsm.cl/~agv/elo330/2s14/Assignments/T3/T3.1.png)
 
 Figura 1: Intercepción de tráfico y emulación de retardo y pérdida de paquetes
