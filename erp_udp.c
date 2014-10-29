@@ -11,13 +11,14 @@
 #include <fcntl.h>      //open()
 #include <time.h>       //gettimeofday()
 #include <sys/time.h>   //gettimeofday()
+//#define TEST 1
 
 #define MTU             1500
 
 //solo para hacer pruebas/////
 #define srv_PORTNUMBER 12346  //12346
 #define cli_PORTNUMBER 12345    //12345
-#define PORCENTAJE_PERDIDA 50
+#define PORCENTAJE_PERDIDA 1
 #define RETARDOUS 1000                 //en ms
 #define RETARDOUS_VARIATION 1000     //en ms
 //////////////////////////////
@@ -311,25 +312,27 @@ int main(int argc, char *argv[]) {
 
     srand(time(NULL));              //para que se generen numeros un poco mas "aleatorios"
 
-
-    //descomentar, para cuando se terminen las pruebas
-
-    // switch(argc){
-    //     case 6:
-            if(gethostname(hostname, sizeof(hostname)) < 0)                     // Si se omite el host_remoto se entiende que es la misma maquina (localhost).
+    #ifdef TEST
+        if(gethostname(hostname, sizeof(hostname)) < 0)                     // Si se omite el host_remoto se entiende que es la misma maquina (localhost).
                 {perror("gethostname failed"); exit(-1);}
-    //         break;
-    //     case 7:
-    //         strcpy(hostname, argv[5]);                                          // Extrae nombre de host del argumento.
-    //         break;
-    //     default:
-    //         printf("Uso $%s (retardo_promedio) (variación_retardo) (porcentaje_pérdida) (puerto_local) [host_remoto] (puerto_remoto)\n", argv[0]);
-    // }
+    #else
+    switch(argc){
+        case 6:
+            if(gethostname(hostname, sizeof(hostname)) < 0)                     // Si se omite el host_remoto se entiende que es la misma maquina (localhost).
+               {perror("gethostname failed"); exit(-1);}
+            break;
+        case 7:
+            strcpy(hostname, argv[5]);                                          // Extrae nombre de host del argumento.
+            break;
+        default:
+            printf("Uso $%s (retardo_promedio) (variación_retardo) (porcentaje_pérdida) (puerto_local) [host_remoto] (puerto_remoto)\n", argv[0]);
+            return -1;
+    }
 
-
-    // retardo = atoi(argv[1])*1000; 
-    // variacion_retardo = atoi(argv[2])*1000;
-    // PROB_PERDIDA= atoi(argv[3]);
+    retardo = atoi(argv[1])*1000; 
+    variacion_retardo = atoi(argv[2])*1000;
+    PROB_PERDIDA= atoi(argv[3]);
+    #endif
 
 
 
@@ -338,9 +341,13 @@ int main(int argc, char *argv[]) {
     //////////////////////////////////////////////////////////
     if ((s_srv = socket(AF_INET, SOCK_DGRAM, 0)) < 0)                          // UDP
         {perror("socket failed"); exit(-1);}
-    name_srv.sin_family = AF_INET;                                              // Address Family Internet.
+    name_srv.sin_family = AF_INET; 
     
-    name_srv.sin_port = htons(srv_PORTNUMBER);
+    #ifdef TEST
+        name_srv.sin_port = htons(srv_PORTNUMBER);
+    #else
+        name_srv.sin_port = htons(atoi(argv[4]));                                              // Address Family Internet.
+    #endif    
     
     name_srv.sin_addr.s_addr = htonl(INADDR_ANY);                               // Se atienden requerimientos entrantes por cualquier interfaz.
     len_srv = sizeof(struct sockaddr_in);                                       // Tamano de la estructura sockaddr_in.
@@ -356,7 +363,11 @@ int main(int argc, char *argv[]) {
         {perror("socket failed"); exit(-1);}
     name_cli.sin_family = AF_INET;                                              // Address Family Internet.
 
-    name_cli.sin_port = htons(cli_PORTNUMBER);                              // Asigna la puerta de servicio del host remoto, la cual es pasada en el tercer argumento.
+    #ifdef TEST
+        name_cli.sin_port = htons(cli_PORTNUMBER);                   // Asigna la puerta de servicio del host remoto, la cual es pasada en el tercer argumento.
+    #else
+        name_cli.sin_port = htons(atoi(argv[argc-1])); 
+    #endif
 
     memcpy(&name_cli.sin_addr, hp->h_addr_list[0], hp->h_length);               // Guarda la direccion del host remoto en name_cli.
     len_cli = sizeof(struct sockaddr_in);                                       // Tamano de la estructura sockaddr_in.

@@ -32,3 +32,19 @@
     $ make clean
 
 #Ejemplos de uso
+
+  Para poder probar esta aplicación es necesario contar con un programa que emita datos por conexión UDP (Cliente) y otro que lo reciba (Servidor).
+
+  Por ejemplo ejecutamos el servidor UDP de la siguiente página configurado para el puerto 12346
+
+    http://profesores.elo.utfsm.cl/~agv/elo330/programs/ipc_withSockets/common/serverUDPs.c
+
+  Y el siguiente cliente en el puerto 12345
+
+    http://profesores.elo.utfsm.cl/~agv/elo330/programs/ipc_withSockets/common/clientUDPs.c
+
+  Pero antes que esto ejecutamos nuestro programa de la siguiente manera
+
+    $ ./erp_udp 5000 100 1 12345 localhost 12346 
+
+  Esto retrasará el envío de paquetes desde el cliente en 5 seg, con una taza de pérdidas del 1%.
