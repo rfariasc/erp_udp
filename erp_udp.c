@@ -11,7 +11,8 @@
 #include <fcntl.h>      //open()
 #include <time.h>       //gettimeofday()
 #include <sys/time.h>   //gettimeofday()
-//#define TEST 1
+
+#define TEST 1
 
 #define MTU             1500
 
@@ -19,9 +20,11 @@
 #define srv_PORTNUMBER 12346  //12346
 #define cli_PORTNUMBER 12345    //12345
 #define PORCENTAJE_PERDIDA 1
-#define RETARDOUS 1000                 //en ms
-#define RETARDOUS_VARIATION 1000     //en ms
+#define RETARDOUS 1                 //en ms
+#define RETARDOUS_VARIATION 1     //en ms
 //////////////////////////////
+
+//TODO si se le pone 0 a todo hay error al hacer la operacion "%" mas abajo
 
 //argv[0]: throttle_tcp
 //argv[1]: puerto local
@@ -34,13 +37,11 @@ struct paquete{
        struct paquete *siguiente;
 };
 struct paquete *primero_up, *ultimo_up, *primero_down, *ultimo_down;
-
 /*
     Los punteros primero_up y ultimo_up, son los punteros al ultimo y primero de la lista
     que contiene los paquetes recibidos desde el cliente.
     Mismo caso para primero_down y ultimo_down
 */
-
 
 int subida=0;                                                   // Variable global para almacenar la tasa de subida (graphics).
 int bajada=0;                                                   // Variable global para almacenar la tasa de bajada (graphics).
@@ -77,6 +78,8 @@ pthread_rwlock_t contadordown = PTHREAD_RWLOCK_INITIALIZER;     // Candado de ex
 void add_up(){
     struct paquete *nuevo;
 
+   printf("ADD UP!!!\n");
+
     nuevo = (struct paquete *) malloc (sizeof(struct paquete));
     gettimeofday(&nuevo->t_init, NULL);
     nuevo->siguiente = NULL;
@@ -85,6 +88,7 @@ void add_up(){
         pthread_mutex_lock(&bufupfirst);
         primero_up = nuevo;
         pthread_mutex_unlock(&bufupfirst);
+
         pthread_mutex_lock(&bufuplast);
         ultimo_up = nuevo;
         pthread_mutex_unlock(&bufuplast);
@@ -105,9 +109,10 @@ void add_up(){
 void *recibe_up(void *args){ 
     char buf[MTU];
     int n,i;
+   while ((n = recv(*((int *)(args)), buf, sizeof(buf), 0)) > 0){
 
+        printf("recibido (recibe_up) = %s\n", buf);
 
-    while ((n = recv(*((int *)(args)), buf, sizeof(buf), 0)) > 0){
         add_up();
 
         pthread_mutex_lock(&bufuplast);
@@ -168,6 +173,9 @@ void *upload(void *args) {
         }
 
         if ((numero = rand()%101) < (100-PROB_PERDIDA)){ //si hay suerte se manda...
+
+            printf("Encviando (UPload) = %s\n", auxiliar->buffer);
+
             if (sendto(*((int *)(args) + 1), auxiliar->buffer, auxiliar->leng, 0, (struct sockaddr*) &name_cli, sizeof(struct sockaddr_in)) < 0)                // Envia j bytes recibidos del cliente al servidor.
                {perror("send failed"); exit(1);}
         }
@@ -179,8 +187,8 @@ void *upload(void *args) {
         primero_up=auxiliar->siguiente;
         free(auxiliar);
         pthread_mutex_unlock(&bufupfirst);
-        pthread_mutex_unlock(&uploadlock);
 
+        pthread_mutex_unlock(&uploadlock);
     }
 }
 
@@ -196,8 +204,8 @@ void add_down(){
      if (primero_down==NULL) {
          pthread_mutex_lock(&bufdownfirst);
          primero_down = nuevo;
-
          pthread_mutex_unlock(&bufdownfirst);
+
          pthread_mutex_lock(&bufdownlast);
          ultimo_down = nuevo;
          pthread_mutex_unlock(&bufdownlast);
@@ -218,7 +226,10 @@ void *recibe_down(void *args){
     int n,i;
     while ((n = recv(*((int *)(args)+1), buf, sizeof(buf), 0)) > 0){
 
+        printf("recibido (recibe_down) = %s\n", buf);
+
         add_down();
+
         pthread_mutex_lock(&bufdownlast);
         for (i=0;i<=n;i++){
             ultimo_down->buffer[i]=buf[i];
@@ -229,8 +240,8 @@ void *recibe_down(void *args){
         pthread_rwlock_wrlock(&contadordown);
         contador_down=contador_down +1;
         pthread_rwlock_unlock(&contadordown);
-        pthread_cond_signal(&bufferesperad);
 
+        pthread_cond_signal(&bufferesperad);
     }
 }
 
@@ -239,16 +250,13 @@ void *recibe_down(void *args){
 void *download(void *args) {
     struct paquete *auxiliar;
     char buf[MTU];                                                          // Buffer de transferencia.
-    int n;                                                                  // Cantidad de elementos a transferir.
-    int i;                                                                  // Posicion del buffer donde comienzan los elementos que faltan por transmitir.
-    int j;                                                                  // Cantidad parcial de elementos a transferir en un ciclo.
-    int microsegundos;
-    int dormir;
-    struct timeval t_act;
-    
+ //   int n, i, j, microsegundos, dormir, agregado;                                                                  // Posicion del buffer donde comienzan los elementos que faltan por transmitir.
+    int n,i,microsegundos,dormir,numero, agregado; 
+    struct timeval t_act;    
     while(1)
     {
         pthread_mutex_lock(&downloadlock);
+
         pthread_rwlock_rdlock(&contadordown);
         while(contador_down == 0){                                    // mientras la lista este vacia
 
@@ -256,8 +264,6 @@ void *download(void *args) {
           pthread_cond_wait(&bufferesperad, &downloadlock);
           pthread_rwlock_rdlock(&contadordown);
          }
-
-
         pthread_rwlock_unlock(&contadordown);
 
         pthread_mutex_lock(&bufdownfirst);
@@ -266,6 +272,7 @@ void *download(void *args) {
         for (i=0;i<=n;i++){
               buf[i]=primero_down->buffer[i];
         }
+
         auxiliar=primero_down;
         pthread_mutex_unlock(&bufdownfirst);
         gettimeofday(&t_act,NULL);
@@ -273,25 +280,36 @@ void *download(void *args) {
         
 
         pthread_rwlock_rdlock(&retardolock);
-        if(microsegundos<retardo){                                     //compara si el tiempo es suficiente
-        dormir = retardo - microsegundos;                              // calcula cuanto falta
-        pthread_rwlock_unlock(&retardolock);
-           usleep(dormir);
+        if(microsegundos<retardo + (agregado = ( (rand()% (2*variacion_retardo)) - variacion_retardo )) ){
+            dormir = (retardo - microsegundos) + agregado;
+            pthread_rwlock_unlock(&retardolock);
+            usleep(dormir);
         }
 
-        for(i=0;i<n;i+=j)
-        {
-            if (send(*((int *)(args)), buf+i, j, 0) < 0)                    // Envia los j bytes recibidos del servidor al cliente.
-                {perror("send failed"); exit(1);}
+        // if ((numero = rand()%101) < (100-PROB_PERDIDA)){ //si hay suerte se manda...
+        // {
+        //     if (sendto(*((int *)(args)), auxiliar->buffer, auxiliar->leng, 0struct sockaddr*) &name_srv, sizeof(struct sockaddr_in)) < 0)                    // Envia los j bytes recibidos del servidor al cliente.
+        //         {perror("send failed"); exit(1);}
+        // }
+
+        if ((numero = rand()%101) < (100-PROB_PERDIDA)){ //si hay suerte se manda...
+ 
+            printf("Enviando (Download) = %s\n",auxiliar->buffer);
+
+            if (sendto(*((int *)(args) ), auxiliar->buffer, auxiliar->leng, 0, (struct sockaddr*) &name_srv, sizeof(struct sockaddr_in)) < 0)                // Envia j bytes recibidos del cliente al servidor.
+               {perror("send failed"); exit(1);}
         }
+
 
         pthread_rwlock_wrlock(&contadordown);
         contador_down=contador_down -1;                                    // decrementa contador de bajada
         pthread_rwlock_unlock(&contadordown);
+
         pthread_mutex_lock(&bufdownfirst);
         primero_down=auxiliar->siguiente;
         free(auxiliar);                                                    // libera memoria
         pthread_mutex_unlock(&bufdownfirst);
+        
         pthread_mutex_unlock(&downloadlock);
     }
 }                      
@@ -336,9 +354,7 @@ int main(int argc, char *argv[]) {
 
 
 
-    //////////////////////////////////////////////////////////
-    //  Establecimiento de conexion cliente <-> servidor    //
-    //////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////
     if ((s_srv = socket(AF_INET, SOCK_DGRAM, 0)) < 0)                          // UDP
         {perror("socket failed"); exit(-1);}
     name_srv.sin_family = AF_INET; 
@@ -391,6 +407,10 @@ int main(int argc, char *argv[]) {
         {perror("pthread_create failed"); exit(-1);}
     if(pthread_create(&down, NULL, download,(void *) args))     // Crea la hebra que manejara el download.
         {perror("pthread_create failed"); exit(-1);}
+
+    //TODO, mas abajo cuando se cambian los valores
+    // de PROB_PERDIDA y variacion retardo, hay que ponerle un mutex
+    //por que se puede estar leyendo mientras se escribe!!
 
 
     while(1){
