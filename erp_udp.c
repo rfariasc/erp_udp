@@ -12,7 +12,7 @@
 #include <time.h>       //gettimeofday()
 #include <sys/time.h>   //gettimeofday()
 
-#define TEST 1
+//#define TEST 1
 
 #define MTU             1500
 
@@ -255,6 +255,7 @@ void *download(void *args) {
     int n;                                                                  // Cantidad de elementos a transferir.
     int i;                                                                  // Posicion del buffer donde comienzan los elementos que faltan por transmitir.
     int j;                                                                  // Cantidad parcial de elementos a transferir en un ciclo.
+    int agregado;
     int microsegundos;
     int numero;
     int dormir;
