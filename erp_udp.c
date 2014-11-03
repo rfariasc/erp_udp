@@ -54,6 +54,8 @@ int PROB_PERDIDA=PORCENTAJE_PERDIDA;
 struct sockaddr_in name_srv;    // Caracteristicas del socket servidor.
 struct sockaddr_in name_cli;    // Caracteristicas del socket cliente.
 
+struct sockaddr_in cli_side;
+
 pthread_mutex_t subidaLock = PTHREAD_MUTEX_INITIALIZER;         // Candado de exclusion mutua para la tasa de subida.
 pthread_mutex_t bajadaLock = PTHREAD_MUTEX_INITIALIZER;         // Candado de exclusion mutua para la tasa de bajada.
 pthread_mutex_t bufupfirst = PTHREAD_MUTEX_INITIALIZER;         // Candado de exclusion mutua para el bufer de subida
@@ -104,10 +106,11 @@ void add_up(){
 */
 void *recibe_up(void *args){ 
     char buf[MTU];
-    int n,i;
-
-
-    while ((n = recv(*((int *)(args)), buf, sizeof(buf), 0)) > 0){
+    int i;
+    int n;
+    struct sockaddr* temp = (struct sockaddr *)&cli_side;
+    int addr_len = sizeof(cli_side);
+    while ((n = recvfrom(*((int *)(args)), buf, sizeof(buf), 0, temp, &addr_len)) > 0){
         add_up();
 
         pthread_mutex_lock(&bufuplast);
@@ -187,8 +190,6 @@ void *upload(void *args) {
 void add_down(){
      struct paquete *nuevo;
 
-     printf("ADD DOWN!!!\n");
-
      nuevo = (struct paquete *) malloc (sizeof(struct paquete));
      gettimeofday(&nuevo->t_init, NULL);
      nuevo->siguiente = NULL;
@@ -212,7 +213,7 @@ void add_down(){
 }
 
 
-// Funcion que controla el buffer de subida
+// Funcion que controla el buffer de subida desde el servidor hacia el cliente
 void *recibe_down(void *args){
     char buf[MTU];
     int n,i;
@@ -243,8 +244,10 @@ void *download(void *args) {
     int i;                                                                  // Posicion del buffer donde comienzan los elementos que faltan por transmitir.
     int j;                                                                  // Cantidad parcial de elementos a transferir en un ciclo.
     int microsegundos;
+    int numero;
     int dormir;
     struct timeval t_act;
+    int addr_len = sizeof(cli_side);
     
     while(1)
     {
@@ -279,9 +282,8 @@ void *download(void *args) {
            usleep(dormir);
         }
 
-        for(i=0;i<n;i+=j)
-        {
-            if (send(*((int *)(args)), buf+i, j, 0) < 0)                    // Envia los j bytes recibidos del servidor al cliente.
+        if ((numero = rand()%101) < (100-PROB_PERDIDA)){
+            if (sendto(*((int *)(args)), auxiliar->buffer, auxiliar->leng, 0, (struct sockaddr*) &cli_side, sizeof(struct sockaddr_in)) < 0)                    // Envia los j bytes recibidos del servidor al cliente.
                 {perror("send failed"); exit(1);}
         }
 
@@ -354,7 +356,7 @@ int main(int argc, char *argv[]) {
     if(bind(s_srv, (struct sockaddr *) &name_srv, len_srv))                     // Asocia el socket con su nombre (caracteristicas).
         {perror("bind failed"); exit(-1);}
 
-    printf("SRV_PORTNUMBER = %d\n", ntohs(name_srv.sin_port));
+    printf("SRV_PORTNUMBER_SOCKET = %d\n", ntohs(name_srv.sin_port));
 
 
     if((hp = gethostbyname(hostname)) == NULL)                                  // Obtiene informacion de la maquina remota.
@@ -372,7 +374,7 @@ int main(int argc, char *argv[]) {
     memcpy(&name_cli.sin_addr, hp->h_addr_list[0], hp->h_length);               // Guarda la direccion del host remoto en name_cli.
     len_cli = sizeof(struct sockaddr_in);                                       // Tamano de la estructura sockaddr_in.
 
-    printf("CLI_PORTNUMBER = %d\n", ntohs(name_cli.sin_port));
+    printf("CLI_PORTNUMBER_SOCKET = %d\n", ntohs(name_cli.sin_port));
 
     //////////////////////////////////////////////////////////
     //  Manejo de las conexiones                            //
@@ -383,11 +385,11 @@ int main(int argc, char *argv[]) {
     args[1]=s_cli;                                              // Guarda en el arreglo de argumentos el descriptor del socket cliente (conectado con el programa servidor).
 
 
-    if(pthread_create(&recibedown, NULL, recibe_down,(void *) args))        // Crea la hebra que controlara el bufer de subida.
+    if(pthread_create(&recibedown, NULL, recibe_down,(void *) args))        // Crea la hebra que controlara el bufer de bajada desde el servidor hacia el cliente.
         {perror("pthread_create failed"); exit(-1);}
-    if(pthread_create(&recibeup, NULL, recibe_up,(void *) args))        // Crea la hebra que controlara el bufer de subida.
+    if(pthread_create(&recibeup, NULL, recibe_up,(void *) args))        // Crea la hebra que controlara el bufer de bajada desde el cliente hacia el servidor.
         {perror("pthread_create failed"); exit(-1);}
-    if(pthread_create(&up, NULL, upload,(void *) args))         // Crea la hebra que manejara el upload.
+    if(pthread_create(&up, NULL, upload,(void *) args))         // Crea la hebra que manejara el upload hacia el servidor desde el cliente.
         {perror("pthread_create failed"); exit(-1);}
     if(pthread_create(&down, NULL, download,(void *) args))     // Crea la hebra que manejara el download.
         {perror("pthread_create failed"); exit(-1);}
