@@ -19,9 +19,9 @@
 //solo para hacer pruebas/////
 #define srv_PORTNUMBER 12346  //12346
 #define cli_PORTNUMBER 12345    //12345
-#define PORCENTAJE_PERDIDA 1
-#define RETARDOUS 1                 //en ms
-#define RETARDOUS_VARIATION 1     //en ms
+#define PORCENTAJE_PERDIDA 0
+#define RETARDOUS 0                 //en ms
+#define RETARDOUS_VARIATION 0     //en ms
 //////////////////////////////
 
 //TODO si se le pone 0 a todo hay error al hacer la operacion "%" mas abajo
@@ -112,6 +112,12 @@ int main(int argc, char *argv[]) {
     PROB_PERDIDA= atoi(argv[3]);
     #endif
 
+    if(PROB_PERDIDA<0 || PROB_PERDIDA>100){
+        printf("La probabilidad de perdida va entre 0 y 100%%\n");
+        return -1;
+    }
+
+
     /////////////////////////////////////////////////
     if ((s_srv = socket(AF_INET, SOCK_DGRAM, 0)) < 0) 
         {perror("socket failed"); exit(-1);}
@@ -138,7 +144,8 @@ int main(int argc, char *argv[]) {
     name_cli.sin_family = AF_INET;                         
 
     #ifdef TEST
-        name_cli.sin_port = htons(cli_PORTNUMBER);               
+        name_cli.sin_port = htons(cli_PORTNUMBER);   
+   # else            
         name_cli.sin_port = htons(atoi(argv[argc-1])); 
     #endif
 
@@ -188,11 +195,17 @@ int main(int argc, char *argv[]) {
 
             printf("Ingrese nueva probabilidad de perdida [0 a 100]: "); scanf("%d",&temp);
             
-            pthread_rwlock_wrlock(&prob_perdida_lock);
-            PROB_PERDIDA=  temp;
-            pthread_rwlock_unlock(&prob_perdida_lock);
+            if(temp>=0 && temp<=100){
 
-            printf("La nueva probabilidad de perdida es de %d%%\n",temp);
+                pthread_rwlock_wrlock(&prob_perdida_lock);
+                PROB_PERDIDA=  temp;
+                pthread_rwlock_unlock(&prob_perdida_lock);
+                printf("La nueva probabilidad de perdida es de %d%%\n",temp);               
+
+            }else{
+                printf("La probabilidad de perdida va entre 0 y 100%%\n");
+            }
+
         }        
         if(condicion==4){
             printf(" Cerrando...\n");
@@ -297,7 +310,11 @@ void *upload(void *args) {
         microsegundos = ((t_act.tv_usec - auxiliar->t_init.tv_usec)  + ((t_act.tv_sec - auxiliar->t_init.tv_sec) * 1000000.0f));
         
         pthread_rwlock_rdlock(&retardolock);
-        if(microsegundos<retardo + (agregado = ( (rand()% (2*variacion_retardo)) - variacion_retardo )) ){
+
+        (variacion_retardo != 0) ?  (agregado = ( (rand()% (2*variacion_retardo)) - variacion_retardo )) :  (agregado = 0);
+        printf("agregado  = %d\n", agregado);
+
+        if(microsegundos<retardo + agregado ){
             dormir = (retardo - microsegundos) + agregado;
             pthread_rwlock_unlock(&retardolock);
             usleep(dormir);
@@ -400,7 +417,11 @@ void *download(void *args) {
         microsegundos = ((t_act.tv_usec - auxiliar->t_init.tv_usec)  + ((t_act.tv_sec - auxiliar->t_init.tv_sec) * 1000000.0f));                                            // calcula diferencia en micro seg        
 
         pthread_rwlock_rdlock(&retardolock);
-        if(microsegundos<retardo + (agregado = ( (rand()% (2*variacion_retardo)) - variacion_retardo )) ){
+
+        (variacion_retardo != 0) ?  (agregado = ( (rand()% (2*variacion_retardo)) - variacion_retardo )) :  (agregado = 0);
+        printf("agregado  = %d\n", agregado);
+
+        if(microsegundos<retardo + agregado ){
             dormir = (retardo - microsegundos) + agregado;
             pthread_rwlock_unlock(&retardolock);
             usleep(dormir);
