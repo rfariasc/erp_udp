@@ -45,16 +45,16 @@ Figura 3: Modelo para controlar tasa y retardo en una dirección
 
   Para poder probar esta aplicación es necesario contar con un programa que emita datos por conexión UDP (Cliente) y otro que lo reciba (Servidor).
 
-  Por ejemplo ejecutamos el servidor UDP de la siguiente página configurado para el puerto 12346
+  Por ejemplo ejecutamos el servidor eco UDP  de la siguiente página configurado para un PUERTO aleatorio dentro de los puertos permitidos.
 
-    http://profesores.elo.utfsm.cl/~agv/elo330/programs/ipc_withSockets/common/serverUDPs.c
+    http://www.cs.rpi.edu/~goldsd/docs/spring2014-csci4220/echo-server-udp.c.txt
 
-  Y el siguiente cliente en el puerto 12345
+  Y el siguiente cliente UDP usando netcat, en el puerto 12345
 
-    http://profesores.elo.utfsm.cl/~agv/elo330/programs/ipc_withSockets/common/clientUDPs.c
+    $ nc -vu localhost 12345
 
   Pero antes que esto ejecutamos nuestro programa de la siguiente manera
 
-    $ ./erp_udp 5000 100 1 12345 localhost 12346 
+    $ ./erp_udp 5000 100 1 12345 localhost PUERTO_ALEATORIO_SERVER 
 
-  Esto retrasará el envío de paquetes desde el cliente en 5 seg, con una taza de pérdidas del 1%.
+  Esto retrasará el envío de paquetes desde el cliente en 5 seg hacia el servidor, con una taza de pérdidas del 1%.
