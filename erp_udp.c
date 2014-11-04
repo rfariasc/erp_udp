@@ -1,18 +1,18 @@
-#include <pthread.h>    //pthread_create(), pthread_join(), pthread_attr_destroy(), pthread_cond_wait(), pthread_cond_signal(), pthread_mutex_lock(), pthread_mutex_unlock()
-#include <stdio.h>      //printf(), perror(), fflush()
-#include <stdlib.h>     //exit(), atoi()
-#include <sys/types.h>  //socket(), bind(), accept(), recv(), connect(), fork(), open()
-#include <sys/socket.h> //socket(), bind(), accept(), recv(), connect()
-#include <netinet/in.h> //sockaddr_in, htons()
-#include <netdb.h>      //gethostbyname() 
-#include <string.h>     //strcpy(), memcpy()
-#include <unistd.h>     //gethostname(), close(), write(), sleep(), fork()
-#include <sys/stat.h>   //open()
-#include <fcntl.h>      //open()
-#include <time.h>       //gettimeofday()
-#include <sys/time.h>   //gettimeofday()
+#include <pthread.h>    
+#include <stdio.h>      
+#include <stdlib.h>     
+#include <sys/types.h>  
+#include <sys/socket.h> 
+#include <netinet/in.h> 
+#include <netdb.h>      
+#include <string.h>     
+#include <unistd.h>     
+#include <sys/stat.h>   
+#include <fcntl.h>      
+#include <time.h>       
+#include <sys/time.h>   
 
-#define TEST 1
+//#define TEST 1
 
 #define MTU             1500
 
@@ -24,7 +24,6 @@
 #define RETARDOUS_VARIATION 0     //en ms
 //////////////////////////////
 
-//TODO si se le pone 0 a todo hay error al hacer la operacion "%" mas abajo
 
 struct paquete{
        char buffer[MTU];
@@ -69,12 +68,22 @@ pthread_rwlock_t prob_perdida_lock = PTHREAD_RWLOCK_INITIALIZER;
 pthread_rwlock_t contadorup = PTHREAD_RWLOCK_INITIALIZER;       
 pthread_rwlock_t contadordown = PTHREAD_RWLOCK_INITIALIZER;     
 
-void add_up(void);
-void *recibe_up(void *args);
-void *upload(void *args);
-void add_down();
-void *recibe_down(void *args);
-void *download(void *args);
+
+//////////////////Funciones que intervienen en el flujo desde el Cliente hacia el Servidor//////////////////
+
+void toServer_list(void);               //Crea paquetes, dependiendo de cuantos sean mandandos por el cliente hacia el servidor
+void *toServer_receiver(void *args);    //Recibe y almacena los paquetes del cliente (los que serán enviados al servidor)
+void *toServer_postman(void *args);     //Envia los paquetes (que recibio toServer_receiver) al Servidor
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////Funciones que intervienen en el flujo desde el Servidor hacia el Cliente//////////////////
+
+void toClient_list();                   //Crea paquetes, dependiendo de cuantos sean mandandos por el servidor hacia el cliente
+void *toClient_receiver(void *args);    //Recibe y almacena los paquetes del servidor (los que serán enviados al cliente)
+void *toClient_postman(void *args);     //Envia los paquetes (que recibio toClient_receiver) al Cliente
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) {
     int s_srv;                     
@@ -134,8 +143,10 @@ int main(int argc, char *argv[]) {
     if(bind(s_srv, (struct sockaddr *) &name_srv, len_srv))                 
         {perror("bind failed"); exit(-1);}
 
-    printf("SRV_PORTNUMBER_SOCKET = %d\n", ntohs(name_srv.sin_port));
 
+    #ifdef TEST
+    printf("SRV_PORTNUMBER_SOCKET = %d\n", ntohs(name_srv.sin_port));
+    #endif
 
     if((hp = gethostbyname(hostname)) == NULL)                        
         {perror("gethostbyname failed"); exit(-1);}
@@ -145,33 +156,39 @@ int main(int argc, char *argv[]) {
 
     #ifdef TEST
         name_cli.sin_port = htons(cli_PORTNUMBER);   
-   # else            
+    #else            
         name_cli.sin_port = htons(atoi(argv[argc-1])); 
     #endif
 
     memcpy(&name_cli.sin_addr, hp->h_addr_list[0], hp->h_length);     
 
+
+    #ifdef TEST
     printf("CLI_PORTNUMBER_SOCKET = %d\n", ntohs(name_cli.sin_port));
+    #endif
 
     ////////////////////////////////////////
 
     args[0]=s_srv;    
     args[1]=s_cli;          
 
-    if(pthread_create(&recibedown, NULL, recibe_down,(void *) args))    
+    if(pthread_create(&recibedown, NULL, toClient_receiver,(void *) args))    
         {perror("pthread_create failed"); exit(-1);}
-    if(pthread_create(&recibeup, NULL, recibe_up,(void *) args))  
+    if(pthread_create(&recibeup, NULL, toServer_receiver,(void *) args))  
         {perror("pthread_create failed"); exit(-1);}
-    if(pthread_create(&up, NULL, upload,(void *) args))  
+    if(pthread_create(&up, NULL, toServer_postman,(void *) args))  
         {perror("pthread_create failed"); exit(-1);}
-    if(pthread_create(&down, NULL, download,(void *) args))    
+    if(pthread_create(&down, NULL, toClient_postman,(void *) args))    
         {perror("pthread_create failed"); exit(-1);}
 
     while(1){
 
         int temp=0;
         int condicion=0;
-        printf("1)  Nuevo retardo promedio [ms]\n2)  Nueva variacion retardo en [ms]\n3)  Nueva probabilidad de perdida [0 a 100]:\n4)  Salir \n"); scanf("%d",&condicion);
+        printf("===================================\n");
+        printf("1)  Nuevo retardo promedio [ms]\n2)  Nueva variacion retardo en [ms]\n3)  Nueva probabilidad de perdida [0 a 100]:\n4)  Salir \n"); 
+        printf("===================================\n");
+        scanf("%d",&condicion);
         if (condicion==1){
             printf("Ingrese nuevo retardo promedio [ms]: "); scanf("%d",&temp);
 
@@ -231,10 +248,8 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void add_up(){
+void toServer_list(){
     struct paquete *nuevo;
-
-   printf("ADD UP!!!\n");
 
     nuevo = (struct paquete *) malloc (sizeof(struct paquete));
     gettimeofday(&nuevo->t_init, NULL);
@@ -257,7 +272,7 @@ void add_up(){
     }
 }
 
-void *recibe_up(void *args){ 
+void *toServer_receiver(void *args){ 
     char buf[MTU];
 
     int i;
@@ -266,7 +281,7 @@ void *recibe_up(void *args){
     int addr_len = sizeof(cli_side);
     while ((n = recvfrom(*((int *)(args)), buf, sizeof(buf), 0, temp, &addr_len)) > 0){
 
-        add_up();
+        toServer_list();
 
         pthread_mutex_lock(&bufuplast);
         for (i=0;i<=n;i++){ 
@@ -284,7 +299,7 @@ void *recibe_up(void *args){
     return 0;
 }
 
-void *upload(void *args) {
+void *toServer_postman(void *args) {
     struct paquete *auxiliar;
     int microsegundos,dormir,numero, agregado; 
 
@@ -312,7 +327,6 @@ void *upload(void *args) {
         pthread_rwlock_rdlock(&retardolock);
 
         (variacion_retardo != 0) ?  (agregado = ( (rand()% (2*variacion_retardo)) - variacion_retardo )) :  (agregado = 0);
-        printf("agregado  = %d\n", agregado);
 
         if(microsegundos<retardo + agregado ){
             dormir = (retardo - microsegundos) + agregado;
@@ -323,7 +337,6 @@ void *upload(void *args) {
         pthread_rwlock_wrlock(&prob_perdida_lock);
         if ((numero = rand()%101) < (100-PROB_PERDIDA)){            //Si hay suerte se manda
             pthread_rwlock_unlock(&prob_perdida_lock);
-            printf("Enviando (UPload) = %s\n", auxiliar->buffer);
 
             if (sendto(*((int *)(args) + 1), auxiliar->buffer, auxiliar->leng, 0, (struct sockaddr*) &name_cli, sizeof(struct sockaddr_in)) < 0)                // Envia j bytes recibidos del cliente al servidor.
                {perror("send failed"); exit(1);}
@@ -342,7 +355,7 @@ void *upload(void *args) {
     }
 }
 
-void add_down(){
+void toClient_list(){
      struct paquete *nuevo;
 
      nuevo = (struct paquete *) malloc (sizeof(struct paquete));
@@ -366,14 +379,12 @@ void add_down(){
       }
 }
 
-void *recibe_down(void *args){
+void *toClient_receiver(void *args){
     char buf[MTU];
     int n,i;
     while ((n = recv(*((int *)(args)+1), buf, sizeof(buf), 0)) > 0){
 
-        printf("recibido (recibe_down) = %s\n", buf);
-
-        add_down();
+        toClient_list();
 
         pthread_mutex_lock(&bufdownlast);
         for (i=0;i<=n;i++){
@@ -391,7 +402,7 @@ void *recibe_down(void *args){
     return 0;
 }
 
-void *download(void *args) {
+void *toClient_postman(void *args) {
     struct paquete *auxiliar;
     int agregado, microsegundos, numero, dormir;
     struct timeval t_act;
@@ -419,7 +430,6 @@ void *download(void *args) {
         pthread_rwlock_rdlock(&retardolock);
 
         (variacion_retardo != 0) ?  (agregado = ( (rand()% (2*variacion_retardo)) - variacion_retardo )) :  (agregado = 0);
-        printf("agregado  = %d\n", agregado);
 
         if(microsegundos<retardo + agregado ){
             dormir = (retardo - microsegundos) + agregado;
