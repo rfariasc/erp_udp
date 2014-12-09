@@ -1,0 +1,25 @@
+Revisión del ayudante:
+Cristóbal Badilla
+
+Documentación (30%):				50
+Compilación (10%):					100
+Ejecución (60%):
+* Conexión Cliente-servidor (30%):	100
+* Implementación del retardo (15%):	
+* Implementación del error (15%):	100
+-----------------------------
+Total:								
+
+MÉTODO DE PRUEBA
+* Se usó el programa de prueba que se encuentra en este repositorio:
+https://github.com/VirusRushTheater/erp_udp_prueba
+
+------------------------------------------------------------------------------
+Comentarios:
+* La documentación no aclara ninguna clase de detalle de su código ni instrucciones de compilación.
+
+Sugerencias:
+* Fue buena estrategia usar preprocesador para definir pruebas o no.
+* Me gustó cómo hay condicionales para prevenir cualquier inconveniente que pueda ocurrir. Eso es buena práctica.
+* Generalmente los nombres de las variables no son todos en MAYÚSCULAS, sino que esos se ocupan para definir constantes dentro del código, por lo que, al menos en C y C++ se usan para las macros (#define) y en Java para constantes estáticas.
+* Fue buena idea haber usado la hebra del Main para interactuar con el usuario, pero no fue necesario.
